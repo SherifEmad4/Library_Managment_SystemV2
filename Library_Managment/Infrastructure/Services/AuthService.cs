@@ -49,6 +49,7 @@ namespace Library_Managment.Infrastructure.Services
 
         public async Task<AuthResponseDto> LoginAsync(LoginDto dto)
         {
+
             // Find member by email
             var member = await _context.Members.FirstOrDefaultAsync(m => m.Email == dto.Email);
             if (member == null || !BCrypt.Net.BCrypt.Verify(dto.Password, member.PasswordHash))
@@ -63,8 +64,10 @@ namespace Library_Managment.Infrastructure.Services
         {
             var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.NameIdentifier, member.Id.ToString()),
-                new Claim(ClaimTypes.Email, member.Email ?? string.Empty)
+                new Claim("id", member.Id.ToString()),    //
+                new Claim(ClaimTypes.Email, member.Email),
+                new Claim(ClaimTypes.Name, member.Name),
+                //new Claim(ClaimTypes.Role, user.Role) // "Admin" or "Member"
             };
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));

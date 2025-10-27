@@ -1,7 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Library_Managment.Infrastructure.Data;
+﻿using Library_Managment.Application.DTOs;
 using Library_Managment.Domain.Entities;
+using Library_Managment.Infrastructure.Repositories;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Library_Managment.Api.Controllers
 {
@@ -9,99 +9,98 @@ namespace Library_Managment.Api.Controllers
     [ApiController]
     public class BooksController : ControllerBase
     {
-        private readonly LibraryDbContext _context;
+        private readonly IBookRepository _bookRepository;
 
-        public BooksController(LibraryDbContext context)
+        public BooksController(IBookRepository bookRepository)
         {
-            _context = context;
+            _bookRepository = bookRepository;
         }
 
-        // ✅ SINGLE GET WITH FILTERING & PAGINATION
         [HttpGet]
-        public async Task<IActionResult> GetBooks(
-           [FromQuery] string? title,
-           [FromQuery] string? author,
-           [FromQuery] int page = 1,
-           [FromQuery] int pageSize = 10)
+        public async Task<IActionResult> GetBooks([FromQuery] string? title, [FromQuery] string? author, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
         {
-            if (page <= 0) page = 1;
-            if (pageSize <= 0) pageSize = 10;
-
-            var query = _context.Books.AsQueryable();
-
-            // Filtering
-            if (!string.IsNullOrEmpty(title))
-                query = query.Where(b => b.Title.Contains(title));
-
-            if (!string.IsNullOrEmpty(author))
-                query = query.Where(b => b.Author.Contains(author));
-
-            // Count total items before pagination
-            var totalItems = await query.CountAsync();
-
-            // Pagination
-            var books = await query
-                .OrderBy(b => b.Id)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
+            var books = await _bookRepository.GetBooksAsync(title, author, page, pageSize);
 
             var response = new
             {
-                TotalItems = totalItems,
+                TotalItems = books.Count,
                 CurrentPage = page,
                 PageSize = pageSize,
-                TotalPages = (int)Math.Ceiling((double)totalItems / pageSize),
-                Data = books
+                TotalPages = (int)Math.Ceiling((double)books.Count / pageSize),
+                Data = books.Select(b => new BookDto
+                {
+                    Id = b.Id,
+                    Title = b.Title,
+                    Author = b.Author,
+                    PublishedYear = b.PublishedYear,
+                    IsAvailable = b.IsAvailable
+                })
             };
 
             return Ok(response);
         }
 
-        // ✅ GET: api/books/{id}
         [HttpGet("{id}")]
         public async Task<IActionResult> GetBook(int id)
         {
-            var book = await _context.Books.FindAsync(id);
-            if (book == null)
-                return NotFound();
+            var book = await _bookRepository.GetByIdAsync(id);
+            if (book == null) return NotFound();
 
-            return Ok(book);
+            return Ok(new BookDto
+            {
+                Id = book.Id,
+                Title = book.Title,
+                Author = book.Author,
+                PublishedYear = book.PublishedYear,
+                IsAvailable = book.IsAvailable
+            });
         }
 
-        // ✅ POST: api/books
         [HttpPost]
-        public async Task<IActionResult> CreateBook([FromBody] Book book)
+        public async Task<IActionResult> CreateBook([FromBody] CreateBookDto dto)
         {
-            _context.Books.Add(book);
-            await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetBook), new { id = book.Id }, book);
+            var book = new Book
+            {
+                Title = dto.Title,
+                Author = dto.Author,
+                PublishedYear = dto.PublishedYear
+            };
+
+            await _bookRepository.AddAsync(book);
+
+            return CreatedAtAction(nameof(GetBook), new { id = book.Id }, new BookDto
+            {
+                Id = book.Id,
+                Title = book.Title,
+                Author = book.Author,
+                PublishedYear = book.PublishedYear,
+                IsAvailable = book.IsAvailable
+            });
         }
 
-        // ✅ PUT: api/books/{id}
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateBook(int id, [FromBody] Book updatedBook)
+        public async Task<IActionResult> UpdateBook(int id, [FromBody] UpdateBookDto dto)
         {
-            if (id != updatedBook.Id)
-                return BadRequest();
+            var book = await _bookRepository.GetByIdAsync(id);
+            if (book == null) return NotFound();
 
-            _context.Entry(updatedBook).State = EntityState.Modified;
-            await _context.SaveChangesAsync();
+            book.Title = dto.Title;
+            book.Author = dto.Author;
+            book.PublishedYear = dto.PublishedYear;
+            book.IsAvailable = dto.IsAvailable;
+
+            await _bookRepository.UpdateAsync(book);
 
             return NoContent();
         }
 
-        // ✅ DELETE: api/books/{id}
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteBook(int id)
         {
-            var book = await _context.Books.FindAsync(id);
-            if (book == null)
-                return NotFound();
+            var book = await _bookRepository.GetByIdAsync(id);
+            if (book == null) return NotFound();
 
-            _context.Books.Remove(book);
-            await _context.SaveChangesAsync();
-
+            await _bookRepository.DeleteAsync(book);
             return NoContent();
         }
     }

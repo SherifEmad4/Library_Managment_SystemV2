@@ -1,7 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Library_Managment.Infrastructure.Data;
-using Library_Managment.Domain.Entities;
+﻿using Library_Managment.Domain.Entities;
+using Library_Managment.Infrastructure.Repositories;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Library_Managment.Api.Controllers
 {
@@ -9,64 +8,55 @@ namespace Library_Managment.Api.Controllers
     [ApiController]
     public class MembersController : ControllerBase
     {
-        private readonly LibraryDbContext _context;
+        private readonly IGenericRepository<Member> _memberRepository;
 
-        public MembersController(LibraryDbContext context)
+        public MembersController(IGenericRepository<Member> memberRepository)
         {
-            _context = context;
+            _memberRepository = memberRepository;
         }
 
-        // GET: api/members
         [HttpGet]
         public async Task<IActionResult> GetMembers()
         {
-            var members = await _context.Members.ToListAsync();
+            var members = await _memberRepository.GetAllAsync();
             return Ok(members);
         }
 
-        // GET: api/members/{id}
         [HttpGet("{id}")]
         public async Task<IActionResult> GetMember(int id)
         {
-            var member = await _context.Members.FindAsync(id);
-            if (member == null)
-                return NotFound();
-
+            var member = await _memberRepository.GetByIdAsync(id);
+            if (member == null) return NotFound();
             return Ok(member);
         }
 
-        // POST: api/members
         [HttpPost]
         public async Task<IActionResult> CreateMember([FromBody] Member member)
         {
-            _context.Members.Add(member);
-            await _context.SaveChangesAsync();
+            await _memberRepository.AddAsync(member);
             return CreatedAtAction(nameof(GetMember), new { id = member.Id }, member);
         }
 
-        // PUT: api/members/{id}
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateMember(int id, [FromBody] Member updatedMember)
         {
-            if (id != updatedMember.Id)
-                return BadRequest();
+            var member = await _memberRepository.GetByIdAsync(id);
+            if (member == null) return NotFound();
 
-            _context.Entry(updatedMember).State = EntityState.Modified;
+            member.Name = updatedMember.Name;
+            member.Email = updatedMember.Email;
 
-            await _context.SaveChangesAsync();
+            await _memberRepository.UpdateAsync(member);
             return NoContent();
         }
 
-        // DELETE: api/members/{id}
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteMember(int id)
         {
-            var member = await _context.Members.FindAsync(id);
-            if (member == null)
-                return NotFound();
+            var member = await _memberRepository.GetByIdAsync(id);
+            if (member == null) return NotFound();
 
-            _context.Members.Remove(member);
-            await _context.SaveChangesAsync();
+            await _memberRepository.DeleteAsync(member);
             return NoContent();
         }
     }
